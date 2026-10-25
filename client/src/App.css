@@ -1666,3 +1666,39 @@ footer > span {
     flex: 1;
   }
 }
+
+/* =========================
+AUTHENTICATION FEEDBACK
+========================= */
+
+.auth-error,
+.auth-success {
+width: 100%;
+margin: 0 0 18px;
+padding: 12px 14px;
+border-radius: 10px;
+font-size: 0.9rem;
+line-height: 1.5;
+overflow-wrap: anywhere;
+}
+
+.auth-error {
+color: #ffb4b4;
+background: rgba(255, 133, 133, 0.1);
+border: 1px solid rgba(255, 133, 133, 0.35);
+}
+
+.auth-success {
+color: #c9f8a5;
+background: rgba(167, 243, 106, 0.1);
+border: 1px solid rgba(167, 243, 106, 0.35);
+}
+
+/* Accessible keyboard focus for authentication forms */
+
+.auth-submit:focus-visible,
+.auth-card input:focus-visible,
+.auth-card a:focus-visible {
+outline: 2px solid var(--green);
+outline-offset: 3px;
+}
