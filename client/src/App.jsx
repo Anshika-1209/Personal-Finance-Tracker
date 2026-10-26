@@ -97,7 +97,7 @@ HOME PAGE
 function Home() {
 return ( <div className="app"> <nav className="navbar"> <Link to="/" className="logo"> <span className="logo-icon">₹</span> Finora </Link>
 
-```
+
     <div className="nav-links">
       <a href="#features">Features</a>
       <a href="#about">About</a>
