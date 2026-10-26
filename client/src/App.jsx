@@ -97,7 +97,7 @@ HOME PAGE
 function Home() {
 return ( <div className="app"> <nav className="navbar"> <Link to="/" className="logo"> <span className="logo-icon">₹</span> Finora </Link>
 
-
+```
     <div className="nav-links">
       <a href="#features">Features</a>
       <a href="#about">About</a>
@@ -539,7 +539,7 @@ user = JSON.parse(localStorage.getItem("finora-user") || "null");
 user = null;
 }
 
-const [transactions, setTransactions] = useState([]);
+const [transactions, setTransactions]= useState([]);
 const [budgets, setBudgets] = useState([]);
 
 const [budgetCategory, setBudgetCategory] = useState("Food");
@@ -553,6 +553,15 @@ const [showForm, setShowForm] = useState(false);
 const [editingId, setEditingId] = useState(null);
 
 const [loadingTransactions, setLoadingTransactions] = useState(true);
+const [searchTerm, setSearchTerm] = useState("");
+const filteredTransactions = transactions.filter((transaction) => {
+  const query = searchTerm.toLowerCase().trim();
+
+  return (
+    transaction.title?.toLowerCase().includes(query) ||
+    transaction.category?.toLowerCase().includes(query)
+  );
+});
 const [savingTransaction, setSavingTransaction] = useState(false);
 
 const [form, setForm] = useState({
@@ -1579,6 +1588,13 @@ return ( <div className="dashboard-page"> <aside className="sidebar"> <Link to="
       <div className="transactions-heading">
         <div>
           <h2>Recent Transactions</h2>
+          <input
+  type="text"
+  className="transaction-search"
+  placeholder="Search by title or category..."
+  value={searchTerm}
+  onChange={(e) => setSearchTerm(e.target.value)}
+/>
           <p>Your latest income and expenses</p>
         </div>
       </div>
@@ -1607,7 +1623,7 @@ return ( <div className="dashboard-page"> <aside className="sidebar"> <Link to="
         </div>
       ) : (
         <div className="transaction-list">
-          {transactions.map((transaction) => (
+          {filteredTransactions.map((transaction) => (
             <article
               className="transaction-row"
               key={transaction.id}

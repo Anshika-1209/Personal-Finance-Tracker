@@ -1702,3 +1702,26 @@ border: 1px solid rgba(167, 243, 106, 0.35);
 outline: 2px solid var(--green);
 outline-offset: 3px;
 }
+
+.transaction-search {
+  width: 100%;
+  max-width: 360px;
+  padding: 10px 12px;
+  margin: 12px 0 16px;
+  background: #111b16;
+  color: #f5f7f5;
+  border: 1px solid #2b3930;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.transaction-search::placeholder {
+  color: #8a9a8f;
+}
+
+.transaction-search:focus {
+  border-color: #a7f36a;
+  box-shadow: 0 0 0 3px rgba(167, 243, 106, 0.12);
+}
