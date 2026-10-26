@@ -24,8 +24,9 @@ app.get("/", (req, res) => {
   });
 });
 
+
 mongoose
-  .connect(process.env.MONGO_URI)
+  .connect(process.env.MONGODB_URI)
   .then(() => {
     console.log("MongoDB connected successfully! 💚");
 
@@ -36,4 +37,6 @@ mongoose
   .catch((error) => {
     console.error("MongoDB connection failed:", error.message);
   });
+
+
 
