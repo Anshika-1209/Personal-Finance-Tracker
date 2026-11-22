@@ -1,6 +1,4 @@
-
 const mongoose = require("mongoose");
-
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -17,10 +15,22 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
 
-    password: {
+    passwordHash: {
       type: String,
       required: true,
-      minlength: 8,
+      select: false,
+    },
+
+    currency: {
+      type: String,
+      default: "INR",
+      trim: true,
+    },
+
+    monthlyIncome: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
   },
   {
@@ -29,7 +39,3 @@ const userSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model("User", userSchema);
-
-
-
-

@@ -1073,12 +1073,31 @@ return ( <div className="dashboard-page"> <aside className="sidebar"> <Link to="
       ▥ Reports
     </a>
 
-    <div className="sidebar-bottom">
-      <Link to="/" className="sidebar-item">
-        ← Back to home
-      </Link>
+   <div className="sidebar-bottom">
+  <div className="sidebar-profile">
+    <div className="profile-avatar">
+      {(user?.name || "U").charAt(0).toUpperCase()}
     </div>
-  </aside>
+
+    <div className="profile-info">
+      <strong>{user?.name || "My Account"}</strong>
+      <small>{user?.email || "No email available"}</small>
+    </div>
+  </div>
+
+ <button
+  type="button"
+  className="sidebar-item"
+  onClick={() => navigate("/profile")}
+>
+  ◉ My Profile
+</button>
+
+  <Link to="/" className="sidebar-item">
+    ← Back to home
+  </Link>
+</div>
+</aside>
 
   <main className="dashboard-main">
     <header className="dashboard-header">
@@ -1129,23 +1148,28 @@ return ( <div className="dashboard-page"> <aside className="sidebar"> <Link to="
     </section>
 
     <section className="transaction-stats">
-      <article className="transaction-stat">
-        <span>Total Balance</span>
-        <h2>{formatCurrency(balance)}</h2>
-      </article>
+  <article className="transaction-stat">
+    <span>Total Balance</span>
+    <h2>{formatCurrency(balance)}</h2>
+  </article>
 
-      <article className="transaction-stat">
-        <span>Total Income</span>
-        <h2>{formatCurrency(income)}</h2>
-      </article>
+  <article className="transaction-stat">
+    <span>Total Income</span>
+    <h2>{formatCurrency(income)}</h2>
+  </article>
 
-      <article className="transaction-stat">
-        <span>Total Expenses</span>
-        <h2>{formatCurrency(expenses)}</h2>
-      </article>
-    </section>
+  <article className="transaction-stat">
+    <span>Total Expenses</span>
+    <h2>{formatCurrency(expenses)}</h2>
+  </article>
 
-    {/* Financial reports */}
+  <article className="transaction-stat">
+    <span>Monthly Income</span>
+    <h2>{formatCurrency(Number(user?.monthlyIncome || 0))}</h2>
+  </article>
+</section>
+
+{/* Financial reports */}
 
     <section className="charts-section" id="reports">
       <div className="charts-heading">
@@ -1690,9 +1714,132 @@ return ( <BrowserRouter> <Routes>
 <Route path="/" element={<Home />} />
 <Route path="/login" element={<Login />} />
 <Route path="/register" element={<Register />} />
+<Route path="/profile" element={<Profile />} />
 <Route path="/dashboard" element={<Dashboard />} />
 <Route path="*" element={<Navigate to="/" replace />} /> </Routes> </BrowserRouter>
 );
 }
+function Profile() {
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
 
+  useEffect(() => {
+    const token = localStorage.getItem("finora-token");
+
+    fetch("http://localhost:5000/api/profile", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        setProfile(data.user || data);
+        setLoading(false);
+      })
+      .catch(() => {
+        setLoading(false);
+      });
+  }, []);
+  const handleSave = async () => {
+  try {
+    setSaving(true);
+    setMessage("");
+
+    const token = localStorage.getItem("finora-token");
+
+    const res = await fetch("http://localhost:5000/api/profile", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        name: profile.name,
+        currency: profile.currency,
+        monthlyIncome: Number(profile.monthlyIncome),
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.message || "Failed to update profile");
+    }
+
+    setProfile(data.user || data);
+    localStorage.setItem("finora-user", JSON.stringify(data.user || data));
+    setMessage("Profile updated successfully! 💚");
+  } catch (error) {
+    setMessage(error.message);
+  } finally {
+    setSaving(false);
+  }
+};
+
+  if (loading) return <h2>Loading profile...</h2>;
+
+  if (!profile) return <h2>Unable to load profile.</h2>;
+
+  return (
+  <div className="profile-page">
+    <h1>My Profile</h1>
+
+    <label>Name</label>
+    <input
+      type="text"
+      value={profile.name || ""}
+      onChange={(e) =>
+        setProfile({ ...profile, name: e.target.value })
+      }
+    />
+
+    <label>Email</label>
+    <input
+      type="email"
+      value={profile.email || ""}
+      disabled
+    />
+
+    <label>Currency</label>
+    <select
+      value={profile.currency || "INR"}
+      onChange={(e) =>
+        setProfile({ ...profile, currency: e.target.value })
+      }
+    >
+      <option value="INR">INR (₹)</option>
+      <option value="USD">USD ($)</option>
+      <option value="EUR">EUR (€)</option>
+      <option value="GBP">GBP (£)</option>
+    </select>
+
+    <label>Monthly Income</label>
+    <input
+      type="number"
+      min="0"
+      value={profile.monthlyIncome ?? 0}
+      onChange={(e) =>
+        setProfile({
+          ...profile,
+          monthlyIncome: e.target.value,
+        })
+      }
+    />
+    {message && (
+  <p className="profile-message">{message}</p>
+)}
+
+<button
+  type="button"
+  className="profile-save-btn"
+  onClick={handleSave}
+  disabled={saving}
+>
+  {saving ? "Saving..." : "Save Changes"}
+</button>
+  </div>
+);
+}
 export default App;

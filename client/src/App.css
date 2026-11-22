@@ -1725,3 +1725,245 @@ outline-offset: 3px;
   border-color: #a7f36a;
   box-shadow: 0 0 0 3px rgba(167, 243, 106, 0.12);
 }
+
+/* FinTrack current dashboard layout */
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  background: var(--bg);
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  width: 245px;
+  height: 100vh;
+  flex-shrink: 0;
+  overflow-y: auto;
+  padding: 28px 18px;
+  display: flex;
+  flex-direction: column;
+  background: #0e1512;
+  border-right: 1px solid var(--border);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 35px;
+}
+
+.brand-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  background: var(--green);
+  color: #0b1110;
+  font-size: 22px;
+}
+
+.nav-label {
+  margin-bottom: 15px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 13px 14px;
+  margin-bottom: 6px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nav-item:hover,
+.nav-item.active {
+  background: rgba(167, 243, 106, 0.08);
+  color: var(--green);
+}
+
+.sidebar-bottom {
+  margin-top: auto;
+  flex-shrink: 0;
+}
+
+.profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 2px;
+  border-top: 1px solid var(--border);
+}
+
+.profile small {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+}
+
+.main-content {
+  flex: 1;
+  min-width: 0;
+  padding: 30px;
+}
+
+/* Sidebar Profile Styling */
+
+.sidebar-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 16px 0;
+  margin-top: 15px;
+  border-top: 1px solid #26352d;
+}
+
+.profile-avatar {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #a7f36a;
+  color: #0b1110;
+  font-weight: 700;
+}
+
+.profile-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.profile-info strong {
+  color: #edf3f0;
+  font-size: 13px;
+}
+
+.profile-info small {
+  color: #91a09a;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.sidebar-bottom .sidebar-item {
+  width: 100%;
+  background: transparent;
+  color: #91a09a;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar-bottom .sidebar-item:hover {
+  background: rgba(167, 243, 106, 0.08);
+  color: #a7f36a;
+}
+
+/* Profile Page */
+
+.profile-page {
+  min-height: 100vh;
+  padding: 45px;
+  background: #0b1110;
+  color: #edf3f0;
+}
+
+.profile-page h1 {
+  font-family: 'Manrope', sans-serif;
+  font-size: 30px;
+  margin-bottom: 30px;
+}
+
+.profile-page label {
+  display: block;
+  margin: 20px 0 8px;
+  color: #aab8b0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.profile-page input,
+.profile-page select {
+  width: 100%;
+  max-width: 500px;
+  padding: 13px 15px;
+  border: 1px solid #26352d;
+  border-radius: 9px;
+  background: #141e19;
+  color: #edf3f0;
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+.profile-page input:focus,
+.profile-page select:focus {
+  border-color: #a7f36a;
+}
+
+.profile-page input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.profile-save-btn {
+  display: block;
+  margin-top: 28px;
+  padding: 13px 28px;
+  background: #a7f36a;
+  color: #0b1110;
+  border: none;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.profile-save-btn:hover {
+  background: #baff85;
+  transform: translateY(-2px);
+}
+
+.profile-save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.profile-message {
+  margin-top: 20px;
+  color: #a7f36a;
+  font-size: 14px;
+}
+
+/* Four dashboard stat cards in one row */
+
+.transaction-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 1000px) {
+  .transaction-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

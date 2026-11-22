@@ -34,6 +34,10 @@ button {
 }
 
 .sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
   width: 245px;
   background: #fff;
   border-right: 1px solid #e9eaf2;
@@ -111,7 +115,8 @@ button {
 }
 
 .sidebar-bottom {
-  margin-top: auto;
+  margin-top: 20px;
+  flex-shrink: 0;
 }
 
 .help-card {
@@ -746,9 +751,10 @@ button {
     padding: 0 0 30px;
   }
 
-  .brand > div:last-child, .nav-label, .nav-item:not(.active) {
-    display: none;
-  }
+  .brand > div:last-child,
+.nav-label {
+  display: none;
+}
 
   .nav-item {
     justify-content: center;

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import './App.css';
+import Auth from './Auth.jsx';
 
 const API_URL = 'http://localhost:5000/api';
 
@@ -38,32 +39,229 @@ function formatMoney(amount) {
 }
 
 function App() {
+  const [token, setToken] = useState(
+    () => sessionStorage.getItem('finoraToken')
+  );
+
+  const [user, setUser] = useState(() => {
+    try {
+      const savedUser = sessionStorage.getItem('finoraUser');
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [authChecking, setAuthChecking] = useState(true);
+
   const [month, setMonth] = useState('October 2026');
   const [activePage, setActivePage] = useState('Dashboard');
   const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Profile states
+  const [profileData, setProfileData] = useState({
+    name: '',
+    email: '',
+    currency: 'INR',
+    monthlyIncome: 0,
+  });
+
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMessage, setProfileMessage] = useState('');
+  const [profileError, setProfileError] = useState(false);
+
+  // Verify the saved login session and retrieve the user's profile.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function verifySession() {
+      if (!token) {
+        setUser(null);
+        setAuthChecking(false);
+        return;
+      }
+
+      setAuthChecking(true);
+
+      try {
+        const response = await fetch(`${API_URL}/profile`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error('Session expired.');
+        }
+
+        const data = await response.json();
+
+        if (!cancelled) {
+          setUser(data.user);
+
+          sessionStorage.setItem(
+            'finoraUser',
+            JSON.stringify(data.user)
+          );
+        }
+      } catch {
+        if (!cancelled) {
+          sessionStorage.removeItem('finoraToken');
+          sessionStorage.removeItem('finoraUser');
+
+          setToken(null);
+          setUser(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setAuthChecking(false);
+        }
+      }
+    }
+
+    verifySession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  // Handle successful login or registration.
+  function handleAuthSuccess(userData, authToken) {
+    sessionStorage.setItem('finoraToken', authToken);
+    sessionStorage.setItem(
+      'finoraUser',
+      JSON.stringify(userData)
+    );
+
+    setUser(userData);
+    setToken(authToken);
+  }
+
+  // Logout the current user.
+  function handleLogout() {
+    sessionStorage.removeItem('finoraToken');
+    sessionStorage.removeItem('finoraUser');
+
+    setToken(null);
+    setUser(null);
+    setTransactions([]);
+    setActivePage('Dashboard');
+    setLoadError('');
+  }
+
+  // Open profile page and load current user details.
+  function openProfile() {
+    setProfileData({
+      name: user.name || '',
+      email: user.email || '',
+      currency: user.currency || 'INR',
+      monthlyIncome: user.monthlyIncome ?? 0,
+    });
+
+    setProfileMessage('');
+    setProfileError(false);
+    setActivePage('Profile');
+  }
+
+  // Update the logged-in user's profile.
+  async function handleProfileUpdate(event) {
+    event.preventDefault();
+
+    setProfileSaving(true);
+    setProfileMessage('');
+    setProfileError(false);
+
+    try {
+      const response = await fetch(`${API_URL}/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: profileData.name,
+          currency: profileData.currency,
+          monthlyIncome: Number(profileData.monthlyIncome),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.status === 401) {
+        handleLogout();
+        throw new Error('Session expired. Please log in again.');
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || 'Profile update failed.'
+        );
+      }
+
+      setUser(data.user);
+
+      sessionStorage.setItem(
+        'finoraUser',
+        JSON.stringify(data.user)
+      );
+
+      setProfileData({
+        name: data.user.name,
+        email: data.user.email,
+        currency: data.user.currency,
+        monthlyIncome: data.user.monthlyIncome,
+      });
+
+      setProfileMessage('Profile updated successfully! 💚');
+    } catch (error) {
+      setProfileError(true);
+      setProfileMessage(error.message);
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
+  // Load only the logged-in user's transactions.
   useEffect(() => {
     let cancelled = false;
 
     async function loadTransactions() {
+      if (authChecking || !token || !user) {
+        return;
+      }
+
       setLoading(true);
       setLoadError('');
 
       try {
-        const response = await fetch(`${API_URL}/transactions`);
+        const response = await fetch(`${API_URL}/transactions`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.status === 401) {
+          handleLogout();
+          throw new Error('Session expired. Please log in again.');
+        }
 
         if (!response.ok) {
-          throw new Error('Could not load transactions from the server.');
+          throw new Error(
+            'Could not load transactions from the server.'
+          );
         }
 
         const data = await response.json();
 
         if (!Array.isArray(data)) {
-          throw new Error('The server returned an unexpected response.');
+          throw new Error(
+            'The server returned an unexpected response.'
+          );
         }
 
         if (!cancelled) {
@@ -72,7 +270,8 @@ function App() {
       } catch (error) {
         if (!cancelled) {
           setLoadError(
-            error.message || 'Could not connect to the backend server.'
+            error.message ||
+              'Could not connect to the backend server.'
           );
         }
       } finally {
@@ -87,12 +286,14 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [refreshKey]);
+  }, [refreshKey, token, user, authChecking]);
 
   const [selectedMonth, selectedYear] = month.split(' ');
+
   const selectedMonthIndex = new Date(
     `${selectedMonth} 1, ${selectedYear}`
   ).getMonth();
+
   const selectedYearNumber = Number(selectedYear);
 
   const filteredTransactions = transactions.filter((transaction) => {
@@ -114,7 +315,9 @@ function App() {
     .reduce((sum, t) => sum + Number(t.amount || 0), 0);
 
   const balance = income - expenses;
-  const savingsRate = income > 0 ? Math.round((balance / income) * 100) : 0;
+
+  const savingsRate =
+    income > 0 ? Math.round((balance / income) * 100) : 0;
 
   const categoryTotals = Object.values(
     filteredTransactions
@@ -131,6 +334,7 @@ function App() {
         }
 
         totals[name].amount += Number(transaction.amount || 0);
+
         return totals;
       }, {})
   );
@@ -140,14 +344,15 @@ function App() {
     0
   );
 
-  // Correct donut chart: each category gets its own cumulative slice.
   let currentPercentage = 0;
 
   const donutStops = categoryTotals.map((category) => {
     const start = currentPercentage;
-    currentPercentage += totalCategorySpending > 0
-      ? (category.amount / totalCategorySpending) * 100
-      : 0;
+
+    currentPercentage +=
+      totalCategorySpending > 0
+        ? (category.amount / totalCategorySpending) * 100
+        : 0;
 
     return `${category.color} ${start}% ${currentPercentage}%`;
   });
@@ -178,7 +383,7 @@ function App() {
     };
   });
 
-  // Six-month trend ending with the selected month.
+  // Six-month income and expense report.
   const monthlyReport = Array.from({ length: 6 }, (_, index) => {
     const date = new Date(
       selectedYearNumber,
@@ -205,21 +410,26 @@ function App() {
       .reduce((sum, t) => sum + Number(t.amount || 0), 0);
 
     return {
-      label: date.toLocaleString('en-IN', { month: 'short' }),
+      label: date.toLocaleString('en-IN', {
+        month: 'short',
+      }),
       year: date.getFullYear(),
       income: monthlyIncome,
       expenses: monthlyExpenses,
     };
   });
 
-  // Automatic scaling keeps the largest bar at 150px.
   const chartMaximum = Math.max(
     1,
-    ...monthlyReport.flatMap((item) => [item.income, item.expenses])
+    ...monthlyReport.flatMap((item) => [
+      item.income,
+      item.expenses,
+    ])
   );
 
   const chartHeight = 150;
 
+  // Add a transaction using the logged-in user's JWT.
   async function handleAddTransaction(event) {
     event.preventDefault();
 
@@ -227,9 +437,15 @@ function App() {
     const formData = new FormData(form);
 
     const title = String(formData.get('title') || '').trim();
-    const category = String(formData.get('category') || '').trim();
+    const category = String(
+      formData.get('category') || ''
+    ).trim();
+
     const amount = Number(formData.get('amount'));
-    const type = String(formData.get('type') || 'expense');
+    const type = String(
+      formData.get('type') || 'expense'
+    );
+
     const date = String(formData.get('date') || '');
 
     if (!title || !category || !date) {
@@ -252,33 +468,67 @@ function App() {
     try {
       const response = await fetch(`${API_URL}/transactions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, category, amount, type, date }),
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title,
+          category,
+          amount,
+          type,
+          date,
+        }),
       });
+
+      if (response.status === 401) {
+        handleLogout();
+        throw new Error('Session expired. Please log in again.');
+      }
 
       if (!response.ok) {
         const message = await response.text();
-        throw new Error(message || 'Could not save the transaction.');
+        throw new Error(
+          message || 'Could not save the transaction.'
+        );
       }
 
       const savedTransaction = await response.json();
 
       if (savedTransaction && savedTransaction._id) {
-        setTransactions((previous) => [savedTransaction, ...previous]);
+        setTransactions((previous) => [
+          savedTransaction,
+          ...previous,
+        ]);
       } else {
         setRefreshKey((key) => key + 1);
       }
 
       form.reset();
+
       alert('Transaction saved successfully!');
     } catch (error) {
       alert(
         error.message ||
-          'Could not save the transaction. Check that your backend is running.'
+          'Could not save the transaction. Check your backend.'
       );
     } finally {
       setSaving(false);
     }
+  }
+
+  // Show authentication while checking the saved session.
+  if (authChecking) {
+    return (
+      <div className="auth-page">
+        <p>Checking your session...</p>
+      </div>
+    );
+  }
+
+  // Show login/register page if the user is not authenticated.
+  if (!token || !user) {
+    return <Auth onAuthSuccess={handleAuthSuccess} />;
   }
 
   return (
@@ -286,224 +536,602 @@ function App() {
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-icon">₹</div>
+
           <div>
             <h2>FinTrack</h2>
             <span>PERSONAL FINANCE</span>
           </div>
         </div>
 
-        
-<p className="nav-label">WORKSPACE</p>
+        <p className="nav-label">WORKSPACE</p>
 
-<button
-  className={`nav-item ${activePage === 'Dashboard' ? 'active' : ''}`}
-  onClick={() => setActivePage('Dashboard')}
->
-  <span>▦</span> Dashboard
-</button>
+        <button
+          className={`nav-item ${
+            activePage === 'Dashboard' ? 'active' : ''
+          }`}
+          onClick={() => setActivePage('Dashboard')}
+        >
+          <span>▦</span> Dashboard
+        </button>
 
-<button
-  className={`nav-item ${activePage === 'Budgets' ? 'active' : ''}`}
-  onClick={() => setActivePage('Budgets')}
->
-  <span>◷</span> Budgets
-</button>
+        <button
+          className={`nav-item ${
+            activePage === 'Budgets' ? 'active' : ''
+          }`}
+          onClick={() => setActivePage('Budgets')}
+        >
+          <span>◷</span> Budgets
+        </button>
 
-<button
-  className="nav-item"
-  onClick={() => alert('Reports will be connected next!')}
->
-  <span>▥</span> Reports
-</button>
+        <button
+          className="nav-item"
+          onClick={() => alert('Reports will be connected next!')}
+        >
+          <span>▥</span> Reports
+        </button>
 
-<button
-  className="nav-item"
-  onClick={() => alert('Transaction management will be connected next!')}
->
-  <span>↕</span> Transactions
-</button>
-
+        <button
+          className="nav-item"
+          onClick={() =>
+            alert('Transaction management will be connected next!')
+          }
+        >
+          <span>↕</span> Transactions
+        </button>
 
         <div className="sidebar-bottom">
           <div className="help-card">
             <span>✦</span>
             <strong>Smart money habits</strong>
-            <p>Small savings today create a better tomorrow.</p>
+            <p>
+              Small savings today create a better tomorrow.
+            </p>
           </div>
+
           <div className="profile">
-            <div className="avatar">D</div>
+            <div className="avatar">
+              {(user.name || 'U').charAt(0).toUpperCase()}
+            </div>
+
             <div>
-              <strong>My Account</strong>
-              <small>Personal workspace</small>
+              <strong>{user.name || 'My Account'}</strong>
+              <small>{user.email}</small>
             </div>
           </div>
+
+          <button
+  type="button"
+  onClick={openProfile}
+  style={{
+    display: 'block',
+    visibility: 'visible',
+    opacity: 1,
+    position: 'relative',
+    zIndex: 9999,
+    color: '#000',
+    backgroundColor: '#ffff00',
+    padding: '15px',
+    fontSize: '16px',
+    width: '100%',
+    minHeight: '45px',
+    border: '2px solid red',
+  }}
+>
+  My Profile
+</button>
+
+          <button
+            className="nav-item"
+            onClick={handleLogout}
+          >
+            <span>↪</span> Logout
+          </button>
         </div>
       </aside>
 
       <main className="main-content">
         <header className="topbar">
           <div className="breadcrumb">
-            Workspace <span>/</span> Dashboard
+            Workspace <span>/</span> {activePage}
           </div>
+
           <div className="topbar-right">
             <span className="status-dot"></span>
             <span className="demo-label">LIVE DATA</span>
-            <div className="avatar small">D</div>
+
+            <div className="avatar small">
+              {(user.name || 'U').charAt(0).toUpperCase()}
+            </div>
           </div>
         </header>
 
         {activePage === 'Dashboard' && (
-         <>
-           <section className="welcome-row">
-          <div>
-            <p className="eyebrow">YOUR FINANCIAL OVERVIEW</p>
-            <h1>Good day! <span>✦</span></h1>
-            <p className="subtitle">
-              Here's what's happening with your money.
-            </p>
-          </div>
-
-          <select
-            className="month-select"
-            value={month}
-            onChange={(event) => setMonth(event.target.value)}
-            aria-label="Select dashboard month"
-          >
-            <option>October 2026</option>
-            <option>September 2026</option>
-            <option>August 2026</option>
-          </select>
-        </section>
-
-        {loadError && (
-          <div role="alert" className="panel">
-            <p>{loadError}</p>
-            <button
-              className="text-button"
-              onClick={() => setRefreshKey((key) => key + 1)}
-            >
-              Try again
-            </button>
-          </div>
-        )}
-
-        {loading && (
-          <p className="card-note">Loading your transactions...</p>
-        )}
-
-        <section className="summary-grid">
-          <article className="summary-card balance-card">
-            <div className="card-heading">
-              <span>Total balance</span>
-              <span className="card-icon purple">₹</span>
-            </div>
-            <h2>₹{formatMoney(balance)}</h2>
-            <p className="card-note">Income minus expenses for {month}</p>
-          </article>
-
-          <article className="summary-card">
-            <div className="card-heading">
-              <span>Total income</span>
-              <span className="card-icon green">↙</span>
-            </div>
-            <h2>₹{formatMoney(income)}</h2>
-            <p className="card-note positive">Money received in {month}</p>
-          </article>
-
-          <article className="summary-card">
-            <div className="card-heading">
-              <span>Total expenses</span>
-              <span className="card-icon orange">↗</span>
-            </div>
-            <h2>₹{formatMoney(expenses)}</h2>
-            <p className="card-note">Money spent in {month}</p>
-          </article>
-
-          <article className="summary-card savings-card">
-            <div className="card-heading">
-              <span>Monthly savings</span>
-              <span className="card-icon blue">✧</span>
-            </div>
-            <h2>{savingsRate}%</h2>
-            <p className="card-note">Of income retained</p>
-            <div className="savings-track">
-              <span
-                style={{
-                  width: `${Math.max(0, Math.min(savingsRate, 100))}%`,
-                }}
-              ></span>
-            </div>
-          </article>
-        </section>
-
-        <section className="analytics-grid">
-          <article className="panel spending-panel">
-            <div className="panel-heading">
+          <>
+            <section className="welcome-row">
               <div>
-                <h3>Spending by category</h3>
-                <p>Where your money goes in {month}</p>
-              </div>
-              <span className="pill">{month}</span>
-            </div>
+                <p className="eyebrow">
+                  YOUR FINANCIAL OVERVIEW
+                </p>
 
-            <div className="category-layout">
-              <div className="donut-wrap">
-                <div
-                  className="donut"
-                  style={{ background: donutBackground }}
+                <h1>
+                  Good day! <span>✦</span>
+                </h1>
+
+                <p className="subtitle">
+                  Here's what's happening with your money.
+                </p>
+              </div>
+
+              <select
+                className="month-select"
+                value={month}
+                onChange={(event) => setMonth(event.target.value)}
+                aria-label="Select dashboard month"
+              >
+                <option>October 2026</option>
+                <option>September 2026</option>
+                <option>August 2026</option>
+              </select>
+            </section>
+
+            {loadError && (
+              <div role="alert" className="panel">
+                <p>{loadError}</p>
+
+                <button
+                  className="text-button"
+                  onClick={() =>
+                    setRefreshKey((key) => key + 1)
+                  }
                 >
-                  <div className="donut-center">
-                    <strong>₹{formatMoney(totalCategorySpending)}</strong>
-                    <span>Total spent</span>
+                  Try again
+                </button>
+              </div>
+            )}
+
+            {loading && (
+              <p className="card-note">
+                Loading your transactions...
+              </p>
+            )}
+
+            <section className="summary-grid">
+              <article className="summary-card balance-card">
+                <div className="card-heading">
+                  <span>Total balance</span>
+                  <span className="card-icon purple">₹</span>
+                </div>
+
+                <h2>₹{formatMoney(balance)}</h2>
+
+                <p className="card-note">
+                  Income minus expenses for {month}
+                </p>
+              </article>
+
+              <article className="summary-card">
+                <div className="card-heading">
+                  <span>Total income</span>
+                  <span className="card-icon green">↙</span>
+                </div>
+
+                <h2>₹{formatMoney(income)}</h2>
+
+                <p className="card-note positive">
+                  Money received in {month}
+                </p>
+              </article>
+
+              <article className="summary-card">
+                <div className="card-heading">
+                  <span>Total expenses</span>
+                  <span className="card-icon orange">↗</span>
+                </div>
+
+                <h2>₹{formatMoney(expenses)}</h2>
+
+                <p className="card-note">
+                  Money spent in {month}
+                </p>
+              </article>
+
+              <article className="summary-card savings-card">
+                <div className="card-heading">
+                  <span>Monthly savings</span>
+                  <span className="card-icon blue">✧</span>
+                </div>
+
+                <h2>{savingsRate}%</h2>
+
+                <p className="card-note">
+                  Of income retained
+                </p>
+
+                <div className="savings-track">
+                  <span
+                    style={{
+                      width: `${Math.max(
+                        0,
+                        Math.min(savingsRate, 100)
+                      )}%`,
+                    }}
+                  ></span>
+                </div>
+              </article>
+            </section>
+
+            <section className="analytics-grid">
+              <article className="panel spending-panel">
+                <div className="panel-heading">
+                  <div>
+                    <h3>Spending by category</h3>
+                    <p>Where your money goes in {month}</p>
                   </div>
+
+                  <span className="pill">{month}</span>
+                </div>
+
+                <div className="category-layout">
+                  <div className="donut-wrap">
+                    <div
+                      className="donut"
+                      style={{
+                        background: donutBackground,
+                      }}
+                    >
+                      <div className="donut-center">
+                        <strong>
+                          ₹{formatMoney(totalCategorySpending)}
+                        </strong>
+
+                        <span>Total spent</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="legend">
+                    {categoryTotals.length > 0 ? (
+                      categoryTotals.map((category) => (
+                        <div
+                          className="legend-row"
+                          key={category.name}
+                        >
+                          <span
+                            className="legend-dot"
+                            style={{
+                              background: category.color,
+                            }}
+                          ></span>
+
+                          <span className="legend-name">
+                            {category.name}
+                          </span>
+
+                          <strong>
+                            ₹{formatMoney(category.amount)}
+                          </strong>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="card-note">
+                        No expenses recorded for {month}.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </article>
+
+              <article className="panel budget-panel">
+                <div className="panel-heading">
+                  <div>
+                    <h3>Budget overview</h3>
+                    <p>Spending limits for {month}</p>
+                  </div>
+
+                  <button
+                    className="text-button"
+                    onClick={() => setActivePage('Budgets')}
+                  >
+                    Manage budgets ↗
+                  </button>
+                </div>
+
+                <div className="budget-list">
+                  {budgets.map((budget) => {
+                    const percentage = Math.round(
+                      budget.percentage
+                    );
+
+                    const over = budget.exceeded;
+
+                    const nearLimit =
+                      percentage >= 80 && !over;
+
+                    return (
+                      <div
+                        className="budget-row"
+                        key={budget.category}
+                      >
+                        <div className="budget-meta">
+                          <strong>{budget.category}</strong>
+
+                          <span>
+                            ₹{formatMoney(budget.spent)} / ₹
+                            {formatMoney(budget.limit)}
+                          </span>
+                        </div>
+
+                        <div className="budget-track">
+                          <span
+                            style={{
+                              width: `${Math.min(
+                                percentage,
+                                100
+                              )}%`,
+                              background: budget.color,
+                            }}
+                          ></span>
+                        </div>
+
+                        <div
+                          className={
+                            over || nearLimit
+                              ? 'budget-warning'
+                              : 'budget-percent'
+                          }
+                        >
+                          {over
+                            ? `⚠ Over budget by ₹${formatMoney(
+                                budget.spent - budget.limit
+                              )}`
+                            : nearLimit
+                              ? `⚠ ${percentage}% used — approaching limit`
+                              : `${percentage}% used — within budget`}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </article>
+            </section>
+
+            <section className="panel monthly-panel">
+              <div className="panel-heading">
+                <div>
+                  <h3>Income vs expenses</h3>
+                  <p>Six-month trend ending in {month}</p>
+                </div>
+
+                <div className="chart-legend">
+                  <span>
+                    <i className="legend-income"></i> Income
+                  </span>
+
+                  <span>
+                    <i className="legend-expense"></i> Expenses
+                  </span>
                 </div>
               </div>
 
-              <div className="legend">
-                {categoryTotals.length > 0 ? (
-                  categoryTotals.map((category) => (
-                    <div className="legend-row" key={category.name}>
-                      <span
-                        className="legend-dot"
-                        style={{ background: category.color }}
-                      ></span>
-                      <span className="legend-name">{category.name}</span>
-                      <strong>₹{formatMoney(category.amount)}</strong>
+              <div className="bar-chart">
+                {monthlyReport.map((item) => (
+                  <div
+                    className="bar-group"
+                    key={`${item.label}-${item.year}`}
+                  >
+                    <div className="bar-pair">
+                      <div
+                        className="bar income-bar"
+                        title={`Income ₹${formatMoney(
+                          item.income
+                        )}`}
+                        style={{
+                          height:
+                            item.income > 0
+                              ? `${Math.max(
+                                  4,
+                                  (item.income / chartMaximum) *
+                                    chartHeight
+                                )}px`
+                              : '0px',
+                        }}
+                      ></div>
+
+                      <div
+                        className="bar expense-bar"
+                        title={`Expenses ₹${formatMoney(
+                          item.expenses
+                        )}`}
+                        style={{
+                          height:
+                            item.expenses > 0
+                              ? `${Math.max(
+                                  4,
+                                  (item.expenses / chartMaximum) *
+                                    chartHeight
+                                )}px`
+                              : '0px',
+                        }}
+                      ></div>
                     </div>
-                  ))
+
+                    <span>{item.label}</span>
+                    <small>{item.year}</small>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <form
+              onSubmit={handleAddTransaction}
+              className="transaction-form"
+            >
+              <h3>Add Transaction</h3>
+
+              <input
+                name="title"
+                placeholder="Transaction name"
+                maxLength="100"
+                required
+              />
+
+              <input
+                name="category"
+                placeholder="Category (Food, Salary...)"
+                maxLength="50"
+                required
+              />
+
+              <input
+                name="amount"
+                type="number"
+                placeholder="Amount (₹)"
+                min="0.01"
+                step="0.01"
+                required
+              />
+
+              <select name="type" defaultValue="expense">
+                <option value="expense">Expense</option>
+                <option value="income">Income</option>
+              </select>
+
+              <input
+                name="date"
+                type="date"
+                defaultValue={new Date().toLocaleDateString(
+                  'en-CA'
+                )}
+                required
+              />
+
+              <button type="submit" disabled={saving}>
+                {saving ? 'Saving...' : 'Save Transaction'}
+              </button>
+            </form>
+
+            <section className="panel transactions-panel">
+              <div className="panel-heading">
+                <div>
+                  <h3>Recent transactions</h3>
+                  <p>Transactions recorded in {month}</p>
+                </div>
+
+                <span className="pill">
+                  {filteredTransactions.length} transactions
+                </span>
+              </div>
+
+              <div className="transaction-table">
+                <div className="transaction-header">
+                  <span>TRANSACTION</span>
+                  <span>CATEGORY</span>
+                  <span>DATE</span>
+                  <span>AMOUNT</span>
+                </div>
+
+                {filteredTransactions.length > 0 ? (
+                  filteredTransactions.map(
+                    (transaction, index) => (
+                      <div
+                        className="transaction-row"
+                        key={
+                          transaction._id ||
+                          `${transaction.title}-${transaction.date}-${index}`
+                        }
+                      >
+                        <div className="transaction-title">
+                          <span
+                            className={
+                              transaction.type === 'income'
+                                ? 'transaction-icon income-icon'
+                                : 'transaction-icon expense-icon'
+                            }
+                          >
+                            {transaction.type === 'income'
+                              ? '↓'
+                              : '↑'}
+                          </span>
+
+                          <strong>{transaction.title}</strong>
+                        </div>
+
+                        <span className="transaction-category">
+                          {transaction.category}
+                        </span>
+
+                        <span className="transaction-date">
+                          {parseDate(
+                            transaction.date
+                          ).toLocaleDateString('en-IN', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                        </span>
+
+                        <strong
+                          className={
+                            transaction.type === 'income'
+                              ? 'amount-income'
+                              : 'amount-expense'
+                          }
+                        >
+                          {transaction.type === 'income'
+                            ? '+'
+                            : '-'}
+                          ₹{formatMoney(transaction.amount)}
+                        </strong>
+                      </div>
+                    )
+                  )
                 ) : (
                   <p className="card-note">
-                    No expenses recorded for {month}.
+                    {loading
+                      ? 'Loading transactions...'
+                      : `No transactions found for ${month}.`}
                   </p>
                 )}
               </div>
-            </div>
-          </article>
+            </section>
 
-          <article className="panel budget-panel">
+            <footer className="footer">
+              <span>FinTrack</span> · Personal Finance Tracker{' '}
+              <span>•</span> Built to make money clearer.
+            </footer>
+          </>
+        )}
+
+        {activePage === 'Budgets' && (
+          <section className="panel budget-panel">
             <div className="panel-heading">
               <div>
-                <h3>Budget overview</h3>
+                <h3>Budgets</h3>
                 <p>Spending limits for {month}</p>
               </div>
+
               <button
                 className="text-button"
-                onClick={() => setActivePage('Budgets')}
+                onClick={() => setActivePage('Dashboard')}
               >
-                Manage budgets ↗
+                ← Back to Dashboard
               </button>
             </div>
 
             <div className="budget-list">
               {budgets.map((budget) => {
-                const percentage = Math.round(budget.percentage);
-                const over = budget.exceeded;
-                const nearLimit = percentage >= 80 && !over;
+                const percentage = Math.round(
+                  budget.percentage
+                );
 
                 return (
-                  <div className="budget-row" key={budget.category}>
+                  <div
+                    className="budget-row"
+                    key={budget.category}
+                  >
                     <div className="budget-meta">
                       <strong>{budget.category}</strong>
+
                       <span>
                         ₹{formatMoney(budget.spent)} / ₹
                         {formatMoney(budget.limit)}
@@ -513,266 +1141,151 @@ function App() {
                     <div className="budget-track">
                       <span
                         style={{
-                          width: `${Math.min(percentage, 100)}%`,
+                          width: `${Math.min(
+                            percentage,
+                            100
+                          )}%`,
                           background: budget.color,
                         }}
-                      ></span>
+                      />
                     </div>
 
-                    <div
+                    <p
                       className={
-                        over || nearLimit
+                        budget.exceeded
                           ? 'budget-warning'
                           : 'budget-percent'
                       }
                     >
-                      {over
-                        ? `⚠ Over budget by ₹${formatMoney(
+                      {budget.exceeded
+                        ? `Over budget by ₹${formatMoney(
                             budget.spent - budget.limit
                           )}`
-                        : nearLimit
-                          ? `⚠ ${percentage}% used — approaching limit`
-                          : `${percentage}% used — within budget`}
-                    </div>
+                        : `${percentage}% used`}
+                    </p>
                   </div>
                 );
               })}
             </div>
-          </article>
-        </section>
+          </section>
+        )}
 
-        <section className="panel monthly-panel">
-          <div className="panel-heading">
-            <div>
-              <h3>Income vs expenses</h3>
-              <p>Six-month trend ending in {month}</p>
-            </div>
-            <div className="chart-legend">
-              <span><i className="legend-income"></i> Income</span>
-              <span><i className="legend-expense"></i> Expenses</span>
-            </div>
-          </div>
-
-          <div className="bar-chart">
-            {monthlyReport.map((item) => (
-              <div
-                className="bar-group"
-                key={`${item.label}-${item.year}`}
-              >
-                <div className="bar-pair">
-                  <div
-                    className="bar income-bar"
-                    title={`Income ₹${formatMoney(item.income)}`}
-                    style={{
-                      height:
-                        item.income > 0
-                          ? `${Math.max(
-                              4,
-                              (item.income / chartMaximum) * chartHeight
-                            )}px`
-                          : '0px',
-                    }}
-                  ></div>
-                  <div
-                    className="bar expense-bar"
-                    title={`Expenses ₹${formatMoney(item.expenses)}`}
-                    style={{
-                      height:
-                        item.expenses > 0
-                          ? `${Math.max(
-                              4,
-                              (item.expenses / chartMaximum) * chartHeight
-                            )}px`
-                          : '0px',
-                    }}
-                  ></div>
-                </div>
-                <span>{item.label}</span>
-                <small>{item.year}</small>
+        {/* Profile Page */}
+        {activePage === 'Profile' && (
+          <section className="panel profile-panel">
+            <div className="panel-heading">
+              <div>
+                <h3>My Profile</h3>
+                <p>
+                  Manage your personal and financial details.
+                </p>
               </div>
-            ))}
-          </div>
-        </section>
 
-        <form onSubmit={handleAddTransaction} className="transaction-form">
-          <h3>Add Transaction</h3>
-
-          <input
-            name="title"
-            placeholder="Transaction name"
-            maxLength="100"
-            required
-          />
-
-          <input
-            name="category"
-            placeholder="Category (Food, Salary...)"
-            maxLength="50"
-            required
-          />
-
-          <input
-            name="amount"
-            type="number"
-            placeholder="Amount (₹)"
-            min="0.01"
-            step="0.01"
-            required
-          />
-
-          <select name="type" defaultValue="expense">
-            <option value="expense">Expense</option>
-            <option value="income">Income</option>
-          </select>
-
-          <input
-            name="date"
-            type="date"
-            defaultValue={new Date().toLocaleDateString('en-CA')}
-            required
-          />
-
-          <button type="submit" disabled={saving}>
-            {saving ? 'Saving...' : 'Save Transaction'}
-          </button>
-        </form>
-
-        <section className="panel transactions-panel">
-          <div className="panel-heading">
-            <div>
-              <h3>Recent transactions</h3>
-              <p>Transactions recorded in {month}</p>
-            </div>
-            <span className="pill">
-              {filteredTransactions.length} transactions
-            </span>
-          </div>
-
-          <div className="transaction-table">
-            <div className="transaction-header">
-              <span>TRANSACTION</span>
-              <span>CATEGORY</span>
-              <span>DATE</span>
-              <span>AMOUNT</span>
+              <button
+                className="text-button"
+                onClick={() => setActivePage('Dashboard')}
+              >
+                ← Back to Dashboard
+              </button>
             </div>
 
-            {filteredTransactions.length > 0 ? (
-              filteredTransactions.map((transaction, index) => (
-                <div
-                  className="transaction-row"
-                  key={
-                    transaction._id ||
-                    `${transaction.title}-${transaction.date}-${index}`
-                  }
+            <form
+              onSubmit={handleProfileUpdate}
+              className="transaction-form"
+            >
+              <h3>Personal Information</h3>
+
+              <label htmlFor="profile-name">Full Name</label>
+
+              <input
+                id="profile-name"
+                type="text"
+                value={profileData.name}
+                onChange={(event) =>
+                  setProfileData({
+                    ...profileData,
+                    name: event.target.value,
+                  })
+                }
+                maxLength="60"
+                required
+              />
+
+              <label htmlFor="profile-email">
+                Email Address
+              </label>
+
+              <input
+                id="profile-email"
+                type="email"
+                value={profileData.email}
+                disabled
+              />
+
+              <h3>Financial Preferences</h3>
+
+              <label htmlFor="profile-currency">
+                Preferred Currency
+              </label>
+
+              <select
+                id="profile-currency"
+                value={profileData.currency}
+                onChange={(event) =>
+                  setProfileData({
+                    ...profileData,
+                    currency: event.target.value,
+                  })
+                }
+              >
+                <option value="INR">INR (₹)</option>
+                <option value="USD">USD ($)</option>
+                <option value="EUR">EUR (€)</option>
+                <option value="GBP">GBP (£)</option>
+              </select>
+
+              <label htmlFor="profile-income">
+                Monthly Income
+              </label>
+
+              <input
+                id="profile-income"
+                type="number"
+                min="0"
+                step="0.01"
+                value={profileData.monthlyIncome}
+                onChange={(event) =>
+                  setProfileData({
+                    ...profileData,
+                    monthlyIncome: event.target.value,
+                  })
+                }
+                required
+              />
+
+              {profileMessage && (
+                <p
+                  role="status"
+                  style={{
+                    color: profileError ? '#dc2626' : '#16a34a',
+                    marginTop: '10px',
+                  }}
                 >
-                  <div className="transaction-title">
-                    <span
-                      className={
-                        transaction.type === 'income'
-                          ? 'transaction-icon income-icon'
-                          : 'transaction-icon expense-icon'
-                      }
-                    >
-                      {transaction.type === 'income' ? '↓' : '↑'}
-                    </span>
-                    <strong>{transaction.title}</strong>
-                  </div>
+                  {profileMessage}
+                </p>
+              )}
 
-                  <span className="transaction-category">
-                    {transaction.category}
-                  </span>
-
-                  <span className="transaction-date">
-                    {parseDate(transaction.date).toLocaleDateString('en-IN', {
-                      day: '2-digit',
-                      month: 'short',
-                      year: 'numeric',
-                    })}
-                  </span>
-
-                  <strong
-                    className={
-                      transaction.type === 'income'
-                        ? 'amount-income'
-                        : 'amount-expense'
-                    }
-                  >
-                    {transaction.type === 'income' ? '+' : '-'}₹
-                    {formatMoney(transaction.amount)}
-                  </strong>
-                </div>
-              ))
-            ) : (
-              <p className="card-note">
-                {loading
-                  ? 'Loading transactions...'
-                  : `No transactions found for ${month}.`}
-              </p>
-            )}
-          </div>
-        </section>
-
-        <footer className="footer">
-          <span>FinTrack</span> · Personal Finance Tracker <span>•</span> Built
-          to make money clearer.
-        </footer>
-          </>
+              <button
+                type="submit"
+                disabled={profileSaving}
+              >
+                {profileSaving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </form>
+          </section>
         )}
-
-        {activePage === 'Budgets' && (
-          
-<section className="panel budget-panel">
-  <div className="panel-heading">
-    <div>
-      <h3>Budgets</h3>
-      <p>Spending limits for {month}</p>
-    </div>
-    <button
-      className="text-button"
-      onClick={() => setActivePage('Dashboard')}
-    >
-      ← Back to Dashboard
-    </button>
-  </div>
-
-  <div className="budget-list">
-    {budgets.map((budget) => {
-      const percentage = Math.round(budget.percentage);
-
-      return (
-        <div className="budget-row" key={budget.category}>
-          <div className="budget-meta">
-            <strong>{budget.category}</strong>
-            <span>
-              ₹{formatMoney(budget.spent)} / ₹{formatMoney(budget.limit)}
-            </span>
-          </div>
-
-          <div className="budget-track">
-            <span
-              style={{
-                width: `${Math.min(percentage, 100)}%`,
-                background: budget.color,
-              }}
-            />
-          </div>
-
-          <p className={budget.exceeded ? 'budget-warning' : 'budget-percent'}>
-            {budget.exceeded
-              ? `Over budget by ₹${formatMoney(budget.spent - budget.limit)}`
-              : `${percentage}% used`}
-          </p>
-        </div>
-      );
-    })}
-  </div>
-</section>
-
-        )}
-        </main>
-      
+      </main>
     </div>
   );
 }
-
-export default App; 
+export default App;

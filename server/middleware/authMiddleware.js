@@ -3,6 +3,14 @@ const jwt = require("jsonwebtoken");
 
 const authMiddleware = (req, res, next) => {
   try {
+    if (!process.env.JWT_SECRET) {
+      console.error("JWT_SECRET is not configured.");
+
+      return res.status(500).json({
+        message: "Authentication configuration error.",
+      });
+    }
+
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -13,7 +21,10 @@ const authMiddleware = (req, res, next) => {
 
     const token = authHeader.split(" ")[1];
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET
+    );
 
     req.userId = decoded.userId;
 
@@ -26,4 +37,3 @@ const authMiddleware = (req, res, next) => {
 };
 
 module.exports = authMiddleware;
-
