@@ -732,10 +732,10 @@ try {
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({
-      category: budgetCategory,
-      amount,
-      month: budgetMonth,
-    }),
+  category: budgetCategory,
+  limit: amount,
+  month: budgetMonth,
+   }),
   });
 
   if (response.status === 401) {
@@ -1402,7 +1402,7 @@ return ( <div className="dashboard-page"> <aside className="sidebar"> <Link to="
         <div className="budget-list">
           {budgets.map((budget) => {
             const spent = Number(budget.spent || 0);
-            const limit = Number(budget.amount || 0);
+            const limit = Number(budget.limit || 0);
 
             const percentage =
               limit > 0 ? (spent / limit) * 100 : 0;
